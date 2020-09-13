@@ -20,6 +20,7 @@ from django.utils.six.moves.urllib.request import (
     HTTPPasswordMgrWithDefaultRealm,
     Request,
     build_opener)
+from django.utils.six.moves.urllib.error import HTTPError
 from django.utils.translation import ugettext as _
 from django.template import Context, Template
 from django.template.base import Lexer, Parser
@@ -306,10 +307,19 @@ def dispatch_webhook_event(request, webhook_targets, event, payload):
             else:
                 opener = build_opener()
 
-            opener.open(Request(url.encode('utf-8'), body, headers))
+            request = Request(url.encode('utf-8'), body, headers)
+
+            # Hack to get past Jenkins unauthenticated request requirement,
+            # which mandates using the PUT method.
+            if 'jenkins' in url_parts.netloc and 'token=' in url_parts.query:
+                request.get_method = lambda: 'PUT'
+
+            opener.open(request)
         except Exception as e:
             logging.exception('Could not dispatch WebHook to %s: %s',
                               webhook_target.url, e)
+            if isinstance(e, HTTPError):
+                logging.info('Response from %s:\n%s', webhook_target.url, e.read())
 
 
 def _serialize_review(review, request):
