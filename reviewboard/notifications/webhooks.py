@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 import hashlib
 import hmac
 import logging
+from base64 import b64encode
 from collections import OrderedDict
 from datetime import datetime
 
@@ -17,11 +18,7 @@ from django.utils.safestring import SafeText
 from django.utils.six.moves.urllib.error import HTTPError
 from django.utils.six.moves.urllib.parse import (urlencode, urlsplit,
                                                  urlunsplit)
-from django.utils.six.moves.urllib.request import (
-    HTTPBasicAuthHandler,
-    HTTPPasswordMgrWithDefaultRealm,
-    Request,
-    build_opener)
+from django.utils.six.moves.urllib.request import Request, urlopen
 from django.utils.text import get_text_list
 from django.utils.translation import ugettext as _
 from django.template import Context, Template
@@ -397,20 +394,14 @@ def dispatch_webhook_event(request, webhook_targets, event, payload):
             url_parts = urlsplit(url)
 
             if url_parts.username or url_parts.password:
-                netloc = url_parts.netloc.split('@', 1)[1]
+                credentials, netloc = url_parts.netloc.split('@', 1)
                 url = urlunsplit(
                     (url_parts.scheme, netloc, url_parts.path,
                      url_parts.query, url_parts.fragment))
+                authorization = 'Basic %s' % (b64encode(credentials),)
+                headers['Authorization'] = authorization
 
-                password_mgr = HTTPPasswordMgrWithDefaultRealm()
-                password_mgr.add_password(
-                    None, url, url_parts.username, url_parts.password)
-                handler = HTTPBasicAuthHandler(password_mgr)
-                opener = build_opener(handler)
-            else:
-                opener = build_opener()
-
-            opener.open(Request(url, body, headers))
+            urlopen(Request(url, body, headers))
         except Exception as e:
             logging.exception('Could not dispatch WebHook to %s: %s',
                               webhook_target.url, e)
