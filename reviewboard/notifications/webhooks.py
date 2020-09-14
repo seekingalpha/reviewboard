@@ -20,6 +20,7 @@ from django.utils.six.moves.urllib.request import (
     HTTPPasswordMgrWithDefaultRealm,
     Request,
     build_opener)
+from django.utils.six.moves.urllib.error import HTTPError
 from django.utils.translation import ugettext as _
 from django.template import Context, Template
 from django.template.base import Lexer, Parser
@@ -310,6 +311,9 @@ def dispatch_webhook_event(request, webhook_targets, event, payload):
         except Exception as e:
             logging.exception('Could not dispatch WebHook to %s: %s',
                               webhook_target.url, e)
+            if isinstance(e, HTTPError):
+                logging.info('Error response from %s: %s %s\n%s',
+                             webhook_target.url, e.code, e.reason, e.read())
 
 
 def _serialize_review(review, request):
